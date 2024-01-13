@@ -35,36 +35,81 @@ impl Position {
             position: Data3d::new(),
         }
     }
+}
 
-    fn update(&mut self, velocity: f32) -> &mut Position {
+enum Direction {
+    Positive,
+    Negative,
+}
+
+impl Direction {
+    fn random() -> Self {
+        match rand::random() {
+            true => Self::Positive,
+            false => Self::Negative,
+        }
+    }
+
+    fn turn(&mut self) {
+        match self {
+            Self::Positive => *self = Self::Negative,
+            Self::Negative => *self = Self::Positive,
+        }
+    }
+
+    fn get_factor(&self) -> f32 {
+        match self {
+            Self::Positive => 1.0,
+            Self::Negative => -1.0,
+        }
+    }
+}
+
+struct Movement {
+    position: Position,
+    direction_x: Direction,
+    direction_y: Direction,
+}
+
+impl Movement {
+    fn new(position: Position) -> Self {
+        Self {
+            position,
+            direction_x: Direction::random(),
+            direction_y: Direction::random(),
+        }
+    }
+
+    fn update(&mut self) -> &mut Movement {
         let mut rng = rand::thread_rng();
-        let direction_change_x: f32 = rng.gen_range(-0.1..=0.1);
-        let direction_change_y: f32 = rng.gen_range(-0.1..=0.1);
 
-        // Update position with direction change
-        self.position.x += direction_change_x + rng.gen_range(-1.0..=1.0) + velocity;
-        self.position.y += direction_change_y + rng.gen_range(-1.0..=1.0) + velocity;
+        self.position.position.x += self.direction_x.get_factor() * rng.gen_range(0.0..=1.0);
+        self.position.position.y += self.direction_y.get_factor() * rng.gen_range(0.0..=1.0);
         self
     }
 
-    fn apply_noise(&mut self) -> &mut Position {
+    fn apply_noise(&mut self) -> &mut Movement {
         let mut rng = rand::thread_rng();
-        self.position.x += rng.gen_range(-NOISE_RANGE..=NOISE_RANGE);
-        self.position.y += rng.gen_range(-NOISE_RANGE..=NOISE_RANGE);
+        self.position.position.x += rng.gen_range(-NOISE_RANGE..=NOISE_RANGE);
+        self.position.position.y += rng.gen_range(-NOISE_RANGE..=NOISE_RANGE);
         self
     }
 
     fn ensure_in_bounds(&mut self) {
-        if self.position.x < 0.0 {
-            self.position.x = 0.0;
-        } else if self.position.x > FIELD_WIDTH {
-            self.position.x = FIELD_WIDTH;
+        if self.position.position.x < 0.0 {
+            self.position.position.x = 0.0;
+            self.direction_x.turn();
+        } else if self.position.position.x > FIELD_WIDTH {
+            self.position.position.x = FIELD_WIDTH;
+            self.direction_x.turn();
         }
 
-        if self.position.y < 0.0 {
-            self.position.y = 0.0;
-        } else if self.position.y > FIELD_HEIGHT {
-            self.position.y = FIELD_HEIGHT;
+        if self.position.position.y < 0.0 {
+            self.position.position.y = 0.0;
+            self.direction_y.turn();
+        } else if self.position.position.y > FIELD_HEIGHT {
+            self.position.position.y = FIELD_HEIGHT;
+            self.direction_y.turn();
         }
     }
 }
@@ -72,25 +117,27 @@ impl Position {
 struct Signal;
 
 impl Signal {
-    fn broadcast(&self, position: &mut Position, velocity: f32) {
-        position.update(velocity).apply_noise().ensure_in_bounds();
-        println!("{:?}: {:?}", position.sensor_id, position.position);
+    fn broadcast(&self, movement: &mut Movement) {
+        movement.update().apply_noise().ensure_in_bounds();
+        println!(
+            "{:?}: {:?}",
+            movement.position.sensor_id, movement.position.position
+        );
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let mut positions = Vec::new();
-    let mut rng = rand::thread_rng();
+    let mut movements = Vec::new();
     for i in 0..PLAYER_COUNT {
-        positions.push(Position::new(i as u64));
+        let position = Position::new(i as u64);
+        movements.push(Movement::new(position));
     }
 
     let signal = Signal;
     loop {
-        for position in &mut positions {
-            let velocity = rng.gen_range(-1.0..=1.0) as f32;
-            signal.broadcast(position, velocity);
+        for movement in &mut movements {
+            signal.broadcast(movement);
         }
         sleep(Duration::from_millis(1000)).await;
     }
