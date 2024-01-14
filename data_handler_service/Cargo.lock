@@ -238,6 +238,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "248e3bacc7dc6baa3b21e405ee045c3047101a49145e7e9eca583ab4c2ca5345"
 
 [[package]]
+name = "data_handler_service"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "tokio",
+ "tonic",
+ "tonic-build",
+ "zmq",
+]
+
+[[package]]
 name = "dircpy"
 version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -584,18 +595,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "movements"
-version = "0.1.0"
-dependencies = [
- "prost",
- "rand",
- "tokio",
- "tonic",
- "tonic-build",
- "zmq",
 ]
 
 [[package]]
@@ -971,9 +970,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.11.2"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
+checksum = "2593d31f82ead8df961d8bd23a64c2ccf2eb5dd34b0a34bfb4dd54011c72009e"
 
 [[package]]
 name = "socket2"

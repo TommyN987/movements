@@ -27,6 +27,8 @@ impl Data3d {
     }
 }
 
+impl Copy for Data3d {}
+
 impl Position {
     fn new(sensor_id: u64) -> Self {
         Self {
@@ -140,30 +142,12 @@ async fn main() {
     let mut handles = Vec::new();
     let ctx = Context::new();
 
-    let subscriber: Socket = ctx.socket(SUB).unwrap();
-    subscriber.bind(URL).unwrap();
-    println!("Subscriber connected to server");
-    subscriber.set_subscribe(b"").unwrap();
-
     let mut publishers = Vec::new();
     for _ in 0..PLAYER_COUNT {
         let publisher = ctx.socket(PUB).unwrap();
         publisher.connect(URL).unwrap();
         publishers.push(publisher);
     }
-
-    let subscriber_handle = tokio::spawn(async move {
-        loop {
-            let message = subscriber.recv_msg(0).unwrap();
-            let position: Position = Message::decode(message.as_ref()).unwrap();
-
-            println!(
-                "Received message from sensor {}: x={}, y={}, z={}",
-                position.sensor_id, position.position.x, position.position.y, position.position.z
-            );
-        }
-    });
-    handles.push(subscriber_handle);
 
     publishers
         .into_iter()
