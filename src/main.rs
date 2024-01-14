@@ -1,9 +1,11 @@
 use std::time::SystemTime;
 
 use movements::{Data3d, Position};
+use prost::Message;
 use rand::Rng;
 
 use tokio::time::{sleep, Duration};
+use zmq::Context;
 
 pub mod movements {
     tonic::include_proto!("movements");
@@ -85,6 +87,12 @@ impl Movement {
 
         self.position.position.x += self.direction_x.get_factor() * rng.gen_range(0.0..=1.0);
         self.position.position.y += self.direction_y.get_factor() * rng.gen_range(0.0..=1.0);
+
+        self.position.timestamp_usec = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as u64;
+
         self
     }
 
@@ -117,28 +125,60 @@ impl Movement {
 struct Signal;
 
 impl Signal {
-    fn broadcast(&self, movement: &mut Movement) {
+    fn broadcast(&self, movement: &mut Movement, publisher: &zmq::Socket) {
         movement.update().apply_noise().ensure_in_bounds();
-        println!(
-            "{:?}: {:?}",
-            movement.position.sensor_id, movement.position.position
-        );
+        let mut posistion_bytes = Vec::new();
+        movement.position.encode(&mut posistion_bytes).unwrap();
+
+        publisher.send(&posistion_bytes, 0).unwrap();
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let mut movements = Vec::new();
-    for i in 0..PLAYER_COUNT {
-        let position = Position::new(i as u64);
-        movements.push(Movement::new(position));
+    let mut handles = Vec::new();
+    let ctx = Context::new();
+
+    let subscriber: zmq::Socket = ctx.socket(zmq::SUB).unwrap();
+    subscriber.bind("tcp://127.0.0.1:5555").unwrap();
+    println!("Subscriber connected to server");
+    subscriber.set_subscribe(b"").unwrap();
+
+    let mut publishers = Vec::new();
+    for _ in 0..PLAYER_COUNT {
+        let publisher = ctx.socket(zmq::PUB).unwrap();
+        publisher.connect("tcp://127.0.0.1:5555").unwrap();
+        publishers.push(publisher);
     }
 
-    let signal = Signal;
-    loop {
-        for movement in &mut movements {
-            signal.broadcast(movement);
+    let subscriber_handle = tokio::spawn(async move {
+        loop {
+            let message = subscriber.recv_msg(0).unwrap();
+            let position: Position = Message::decode(message.as_ref()).unwrap();
+
+            println!(
+                "Received message from sensor {}: x={}, y={}, z={}",
+                position.sensor_id, position.position.x, position.position.y, position.position.z
+            );
         }
-        sleep(Duration::from_millis(1000)).await;
+    });
+    handles.push(subscriber_handle);
+
+    publishers
+        .into_iter()
+        .enumerate()
+        .for_each(|(i, publisher)| {
+            let handle = tokio::spawn(async move {
+                let mut movement = Movement::new(Position::new(i as u64));
+                loop {
+                    Signal.broadcast(&mut movement, &publisher);
+                    sleep(Duration::from_millis(1000)).await;
+                }
+            });
+            handles.push(handle);
+        });
+
+    for handle in handles {
+        handle.await.unwrap();
     }
 }
