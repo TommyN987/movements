@@ -5,7 +5,7 @@ use prost::Message;
 use rand::Rng;
 
 use tokio::time::{sleep, Duration};
-use zmq::Context;
+use zmq::{Context, Socket, PUB, SUB};
 
 pub mod movements {
     tonic::include_proto!("movements");
@@ -15,6 +15,7 @@ const FIELD_WIDTH: f32 = 100.0;
 const FIELD_HEIGHT: f32 = 100.0;
 const PLAYER_COUNT: u8 = 10;
 const NOISE_RANGE: f32 = 0.3;
+const URL: &str = "tcp://127.0.0.1:5555";
 
 impl Data3d {
     fn new() -> Self {
@@ -125,7 +126,7 @@ impl Movement {
 struct Signal;
 
 impl Signal {
-    fn broadcast(&self, movement: &mut Movement, publisher: &zmq::Socket) {
+    fn broadcast(&self, movement: &mut Movement, publisher: &Socket) {
         movement.update().apply_noise().ensure_in_bounds();
         let mut posistion_bytes = Vec::new();
         movement.position.encode(&mut posistion_bytes).unwrap();
@@ -139,15 +140,15 @@ async fn main() {
     let mut handles = Vec::new();
     let ctx = Context::new();
 
-    let subscriber: zmq::Socket = ctx.socket(zmq::SUB).unwrap();
-    subscriber.bind("tcp://127.0.0.1:5555").unwrap();
+    let subscriber: Socket = ctx.socket(SUB).unwrap();
+    subscriber.bind(URL).unwrap();
     println!("Subscriber connected to server");
     subscriber.set_subscribe(b"").unwrap();
 
     let mut publishers = Vec::new();
     for _ in 0..PLAYER_COUNT {
-        let publisher = ctx.socket(zmq::PUB).unwrap();
-        publisher.connect("tcp://127.0.0.1:5555").unwrap();
+        let publisher = ctx.socket(PUB).unwrap();
+        publisher.connect(URL).unwrap();
         publishers.push(publisher);
     }
 
