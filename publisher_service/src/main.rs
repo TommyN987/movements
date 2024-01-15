@@ -5,7 +5,7 @@ use prost::Message;
 use rand::Rng;
 
 use tokio::time::{sleep, Duration};
-use zmq::{Context, Socket, PUB, SUB};
+use zmq::{Context, Socket, PUB};
 
 pub mod movements {
     tonic::include_proto!("movements");
@@ -26,8 +26,6 @@ impl Data3d {
         }
     }
 }
-
-impl Copy for Data3d {}
 
 impl Position {
     fn new(sensor_id: u64) -> Self {
